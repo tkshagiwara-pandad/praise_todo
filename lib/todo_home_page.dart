@@ -573,6 +573,8 @@ class _TodoInputDialogState extends State<_TodoInputDialog> {
     super.initState();
     _controller = TextEditingController(text: widget.initial);
     _focusNode = FocusNode();
+    // Synchronous request can sometimes be too early, but for some browsers it's the only one allowed.
+    _focusNode.requestFocus();
   }
 
   @override
