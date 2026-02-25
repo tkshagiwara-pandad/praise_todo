@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'notification_service.dart';
@@ -326,28 +327,13 @@ if (_doneTodayCount == 0) {
     required String hint,
     required String okText,
   }) async {
-    final controller = TextEditingController(text: initial);
-
     return showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(hintText: hint),
-          onSubmitted: (_) => Navigator.pop(context, controller.text),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: Text(okText),
-          ),
-        ],
+      builder: (_) => _TodoInputDialog(
+        title: title,
+        initial: initial,
+        hint: hint,
+        okText: okText,
       ),
     );
   }
@@ -555,6 +541,76 @@ if (_doneTodayCount == 0) {
           );
         },
       ),
+    );
+  }
+}
+
+class _TodoInputDialog extends StatefulWidget {
+  final String title;
+  final String initial;
+  final String hint;
+  final String okText;
+
+  const _TodoInputDialog({
+    required this.title,
+    required this.initial,
+    required this.hint,
+    required this.okText,
+  });
+
+  @override
+  State<_TodoInputDialog> createState() => _TodoInputDialogState();
+}
+
+class _TodoInputDialogState extends State<_TodoInputDialog> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initial);
+    _focusNode = FocusNode();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 少し待ってからキーボード表示とフォーカスを要求
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted) {
+          _focusNode.requestFocus();
+          SystemChannels.textInput.invokeMethod('TextInput.show');
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        autofocus: true,
+        decoration: InputDecoration(hintText: widget.hint),
+        onSubmitted: (_) => Navigator.pop(context, _controller.text),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: Text(widget.okText),
+        ),
+      ],
     );
   }
 }
