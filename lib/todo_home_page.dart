@@ -573,7 +573,8 @@ class _TodoInputDialogState extends State<_TodoInputDialog> {
     super.initState();
     _controller = TextEditingController(text: widget.initial);
     _focusNode = FocusNode();
-    // Synchronous request can sometimes be too early, but for some browsers it's the only one allowed.
+    
+    // Web/Mobileでキーボードを確実に出すため、フォーカスを要求
     _focusNode.requestFocus();
   }
 
@@ -586,61 +587,77 @@ class _TodoInputDialogState extends State<_TodoInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // キーボードの高さ分、下部にパディングを入れる
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-
     return Container(
+      // キーボードの分だけ下にパディングを持たせる（isScrollControlled: true時）
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomPadding),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                widget.title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                autofocus: true,
+                style: const TextStyle(fontSize: 16),
+                decoration: InputDecoration(
+                  hintText: widget.hint,
+                  fillColor: Colors.grey[100],
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                ),
+                maxLines: 5,
+                minLines: 1,
+                onSubmitted: (_) => Navigator.pop(context, _controller.text),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, _controller.text),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  widget.okText,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: widget.hint,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: Colors.grey[100],
-            ),
-            maxLines: 3,
-            minLines: 1,
-            onSubmitted: (_) => Navigator.pop(context, _controller.text),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () => Navigator.pop(context, _controller.text),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(widget.okText, style: const TextStyle(fontSize: 16)),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
