@@ -327,8 +327,10 @@ if (_doneTodayCount == 0) {
     required String hint,
     required String okText,
   }) async {
-    return showDialog<String>(
+    return showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true, // キーボードにかぶらないように制御
+      backgroundColor: Colors.transparent,
       builder: (_) => _TodoInputDialog(
         title: title,
         initial: initial,
@@ -571,16 +573,6 @@ class _TodoInputDialogState extends State<_TodoInputDialog> {
     super.initState();
     _controller = TextEditingController(text: widget.initial);
     _focusNode = FocusNode();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 少し待ってからキーボード表示とフォーカスを要求
-      Future.delayed(const Duration(milliseconds: 150), () {
-        if (mounted) {
-          _focusNode.requestFocus();
-          SystemChannels.textInput.invokeMethod('TextInput.show');
-        }
-      });
-    });
   }
 
   @override
@@ -592,25 +584,62 @@ class _TodoInputDialogState extends State<_TodoInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        controller: _controller,
-        focusNode: _focusNode,
-        autofocus: true,
-        decoration: InputDecoration(hintText: widget.hint),
-        onSubmitted: (_) => Navigator.pop(context, _controller.text),
+    // キーボードの高さ分、下部にパディングを入れる
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('キャンセル'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _controller.text),
-          child: Text(widget.okText),
-        ),
-      ],
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomPadding),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                widget.title,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: widget.hint,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.grey[100],
+            ),
+            maxLines: 3,
+            minLines: 1,
+            onSubmitted: (_) => Navigator.pop(context, _controller.text),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context, _controller.text),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(widget.okText, style: const TextStyle(fontSize: 16)),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
