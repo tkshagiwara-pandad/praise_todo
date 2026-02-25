@@ -212,6 +212,8 @@ if (_doneTodayCount == 0) {
 
   // ---- CRUD ----
   void _addTodo() {
+    // 同期的にフォーカスを要求（重要：Safari対策）
+    _inputFocusNode.requestFocus();
     setState(() {
       _inputTitle = 'Todoを追加';
       _inputHint = '例：英語 30分 / SQL 1問 / スクワット 20回';
@@ -220,11 +222,11 @@ if (_doneTodayCount == 0) {
       _inputController.text = '';
       _isInputVisible = true;
     });
-    // 同期的にフォーカスを要求（重要）
-    _inputFocusNode.requestFocus();
   }
 
   void _editTodo(dynamic key, TodoItem item) {
+    // 同期的にフォーカスを要求（重要：Safari対策）
+    _inputFocusNode.requestFocus();
     setState(() {
       _inputTitle = 'Todoを編集';
       _inputHint = 'Todo内容';
@@ -233,8 +235,6 @@ if (_doneTodayCount == 0) {
       _inputController.text = item.title;
       _isInputVisible = true;
     });
-    // 同期的にフォーカスを要求（重要）
-    _inputFocusNode.requestFocus();
   }
 
   void _hideInput() {
@@ -423,6 +423,7 @@ if (_doneTodayCount == 0) {
                 final dones = _doneItems();
 
                 return ListView(
+                  physics: const ClampingScrollPhysics(), // iOSのバウンスによるズレを抑制
                   padding: const EdgeInsets.all(16),
                   children: [
                     Card(
@@ -571,90 +572,94 @@ if (_doneTodayCount == 0) {
               },
             ),
           ),
-          if (_isInputVisible) _buildBottomInputArea(),
+          _buildBottomInputArea(),
         ],
       ),
     );
   }
 
   Widget _buildBottomInputArea() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.shield, color: Colors.green), // 安定版を示すアイコン
-                  const SizedBox(width: 8),
-                  Text(
-                    _inputTitle,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+    return Visibility(
+      visible: _isInputVisible,
+      maintainState: true, // ウィジェットを破棄せず保持することで瞬時にフォーカスできるようにする
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.star, color: Colors.orange), // 究極版を示すアイコン
+                    const SizedBox(width: 8),
+                    Text(
+                      _inputTitle,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: _hideInput,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _inputController,
+                  focusNode: _inputFocusNode,
+                  autofocus: false, // requestFocusで手動制御
+                  style: const TextStyle(fontSize: 16),
+                  decoration: InputDecoration(
+                    hintText: _inputHint,
+                    fillColor: Colors.grey[100],
+                    filled: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                  maxLines: 4,
+                  minLines: 1,
+                  onSubmitted: (_) => _submitInput(),
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _submitInput,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Colors.deepPurple,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: _hideInput,
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _inputController,
-                focusNode: _inputFocusNode,
-                autofocus: true, // 強制的にフォーカスを奪う
-                style: const TextStyle(fontSize: 16),
-                decoration: InputDecoration(
-                  hintText: _inputHint,
-                  fillColor: Colors.grey[100],
-                  filled: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.all(16),
-                ),
-                maxLines: 4,
-                minLines: 1,
-                onSubmitted: (_) => _submitInput(),
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _submitInput,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.deepPurple,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  child: Text(
+                    _inputOkText,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                child: Text(
-                  _inputOkText,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
