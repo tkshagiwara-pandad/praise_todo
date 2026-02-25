@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'notification_service.dart';
@@ -407,11 +406,13 @@ if (_doneTodayCount == 0) {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addTodo,
-        icon: const Icon(Icons.add),
-        label: const Text('追加'),
-      ),
+      floatingActionButton: _isInputVisible
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _addTodo,
+              icon: const Icon(Icons.add),
+              label: const Text('追加'),
+            ),
       body: Column(
         children: [
           Expanded(
@@ -570,93 +571,90 @@ if (_doneTodayCount == 0) {
               },
             ),
           ),
-          _buildBottomInputArea(),
+          if (_isInputVisible) _buildBottomInputArea(),
         ],
       ),
     );
   }
 
   Widget _buildBottomInputArea() {
-    return Visibility(
-      visible: _isInputVisible,
-      maintainState: true,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.shield, color: Colors.green), // 安定版を示すアイコン
-                    const SizedBox(width: 8),
-                    Text(
-                      _inputTitle,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: _hideInput,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _inputController,
-                  focusNode: _inputFocusNode,
-                  style: const TextStyle(fontSize: 16),
-                  decoration: InputDecoration(
-                    hintText: _inputHint,
-                    fillColor: Colors.grey[100],
-                    filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.all(16),
-                  ),
-                  maxLines: 4,
-                  minLines: 1,
-                  onSubmitted: (_) => _submitInput(),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _submitInput,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.deepPurple,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    _inputOkText,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.shield, color: Colors.green), // 安定版を示すアイコン
+                  const SizedBox(width: 8),
+                  Text(
+                    _inputTitle,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
                     ),
                   ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _hideInput,
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _inputController,
+                focusNode: _inputFocusNode,
+                autofocus: true, // 強制的にフォーカスを奪う
+                style: const TextStyle(fontSize: 16),
+                decoration: InputDecoration(
+                  hintText: _inputHint,
+                  fillColor: Colors.grey[100],
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.all(16),
                 ),
-              ],
-            ),
+                maxLines: 4,
+                minLines: 1,
+                onSubmitted: (_) => _submitInput(),
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _submitInput,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Colors.deepPurple,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  _inputOkText,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
