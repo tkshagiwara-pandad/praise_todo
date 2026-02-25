@@ -29,6 +29,14 @@ class _TodoHomePageState extends State<TodoHomePage> {
 
   bool _hideCompleted = false;
 
+  bool _isInputVisible = false;
+  String _inputTitle = '';
+  String _inputHint = '';
+  String _inputOkText = '';
+  dynamic _inputEditingKey; // null for add, non-null for edit
+  late final TextEditingController _inputController;
+  late final FocusNode _inputFocusNode;
+
   final _rand = Random();
   PraiseLevel _level = PraiseLevel.mid;
 
@@ -37,6 +45,8 @@ class _TodoHomePageState extends State<TodoHomePage> {
     super.initState();
     _todos = Hive.box<TodoItem>(todosBoxName);
     _meta = Hive.box(metaBoxName);
+    _inputController = TextEditingController();
+    _inputFocusNode = FocusNode();
 
     _loadPraiseLevel();
 
@@ -44,6 +54,13 @@ class _TodoHomePageState extends State<TodoHomePage> {
       await _refreshNightlySchedule();
       setState(() {});
     });
+  }
+
+  @override
+  void dispose() {
+    _inputController.dispose();
+    _inputFocusNode.dispose();
+    super.dispose();
   }
 
   // ---- Praise Level (persist) ----
@@ -195,42 +212,65 @@ if (_doneTodayCount == 0) {
   }
 
   // ---- CRUD ----
-  Future<void> _addTodo() async {
-    final text = await _showTextDialog(
-      title: 'Todoを追加',
-      initial: '',
-      hint: '例：英語 30分 / SQL 1問 / スクワット 20回',
-      okText: '追加',
-    );
-    if (text == null) return;
-    final t = text.trim();
-    if (t.isEmpty) return;
-
-    await _todos.add(
-      TodoItem(
-        title: t,
-        createdAt: DateTime.now(),
-        isDone: false,
-        doneAt: null,
-      ),
-    );
-
-    await _refreshNightlySchedule();
-    setState(() {});
+  void _addTodo() {
+    setState(() {
+      _inputTitle = 'Todoを追加';
+      _inputHint = '例：英語 30分 / SQL 1問 / スクワット 20回';
+      _inputOkText = '追加';
+      _inputEditingKey = null;
+      _inputController.text = '';
+      _isInputVisible = true;
+    });
+    // 同期的にフォーカスを要求（重要）
+    _inputFocusNode.requestFocus();
   }
 
-  Future<void> _editTodo(dynamic key, TodoItem item) async {
-    final text = await _showTextDialog(
-      title: 'Todoを編集',
-      initial: item.title,
-      hint: 'Todo内容',
-      okText: '保存',
-    );
-    if (text == null) return;
-    final t = text.trim();
-    if (t.isEmpty) return;
+  void _editTodo(dynamic key, TodoItem item) {
+    setState(() {
+      _inputTitle = 'Todoを編集';
+      _inputHint = 'Todo内容';
+      _inputOkText = '保存';
+      _inputEditingKey = key;
+      _inputController.text = item.title;
+      _isInputVisible = true;
+    });
+    // 同期的にフォーカスを要求（重要）
+    _inputFocusNode.requestFocus();
+  }
 
-    await _todos.put(key, item.copyWith(title: t));
+  void _hideInput() {
+    setState(() {
+      _isInputVisible = false;
+    });
+    _inputFocusNode.unfocus();
+  }
+
+  Future<void> _submitInput() async {
+    final text = _inputController.text.trim();
+    if (text.isEmpty) {
+      _hideInput();
+      return;
+    }
+
+    if (_inputEditingKey == null) {
+      // Add
+      await _todos.add(
+        TodoItem(
+          title: text,
+          createdAt: DateTime.now(),
+          isDone: false,
+          doneAt: null,
+        ),
+      );
+    } else {
+      // Edit
+      final item = _todos.get(_inputEditingKey);
+      if (item != null) {
+        await _todos.put(_inputEditingKey, item.copyWith(title: text));
+      }
+    }
+
+    _hideInput();
     await _refreshNightlySchedule();
     setState(() {});
   }
@@ -321,24 +361,7 @@ if (_doneTodayCount == 0) {
     );
   }
 
-  Future<String?> _showTextDialog({
-    required String title,
-    required String initial,
-    required String hint,
-    required String okText,
-  }) async {
-    return showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true, // キーボードにかぶらないように制御
-      backgroundColor: Colors.transparent,
-      builder: (_) => _TodoInputDialog(
-        title: title,
-        initial: initial,
-        hint: hint,
-        okText: okText,
-      ),
-    );
-  }
+  // 以前のダイアログ方式は削除
 
   // ---- list helpers（dynamic key）----
   List<MapEntry<dynamic, TodoItem>> _activeItems() {
@@ -389,300 +412,263 @@ if (_doneTodayCount == 0) {
         icon: const Icon(Icons.add),
         label: const Text('追加'),
       ),
-      body: ValueListenableBuilder(
-        valueListenable: _todos.listenable(),
-        builder: (context, Box<TodoItem> box, _) {
-          final actives = _activeItems();
-          final dones = _doneItems();
+      body: Stack(
+        children: [
+          ValueListenableBuilder(
+            valueListenable: _todos.listenable(),
+            builder: (context, Box<TodoItem> box, _) {
+              final actives = _activeItems();
+              final dones = _doneItems();
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '全部：$_totalCount / 完了：$_doneCount（今日：$_doneTodayCount） / 残り：$_leftCount',
-                      ),
-                      const SizedBox(height: 6),
-                      Text('連続達成：$_streakDays日'),
-                      const SizedBox(height: 12),
-
-                      SegmentedButton<PraiseLevel>(
-                        segments: const [
-                          ButtonSegment(
-                            value: PraiseLevel.low,
-                            label: Text('低'),
-                          ),
-                          ButtonSegment(
-                            value: PraiseLevel.mid,
-                            label: Text('中'),
-                          ),
-                          ButtonSegment(
-                            value: PraiseLevel.high,
-                            label: Text('高'),
-                          ),
-                        ],
-                        selected: {_level},
-                        onSelectionChanged: (s) => _savePraiseLevel(s.first),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      FilledButton.icon(
-                        onPressed: () async {
-                          await NotificationService.instance.showNow(
-                            id: 9999,
-                            title: _nightlyTitle(),
-                            body: _nightlyBody(),
-                          );
-                        },
-                        icon: const Icon(Icons.notifications_active),
-                        label: const Text('まとめ（今すぐ）'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-              Text(
-                '未完了（${actives.length}）',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-
-              if (actives.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Text('Todoを追加しよう。完了したら全力で褒める。'),
-                )
-              else
-                ...actives.map((entry) {
-                  final key = entry.key;
-                  final item = entry.value;
-                  return Card(
-                    child: ListTile(
-                      leading: Checkbox(
-                        value: item.isDone,
-                        onChanged: (_) => _toggleDone(key, item),
-                      ),
-                      title: Text(item.title),
-                      subtitle: Text(_subtitle(item)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          IconButton(
-                            tooltip: '編集',
-                            icon: const Icon(Icons.edit),
-                            onPressed: () => _editTodo(key, item),
+                          Text(
+                            '全部：$_totalCount / 完了：$_doneCount（今日：$_doneTodayCount） / 残り：$_leftCount',
                           ),
-                          IconButton(
-                            tooltip: '削除',
-                            icon: const Icon(Icons.delete),
-                            onPressed: () => _deleteTodo(key),
+                          const SizedBox(height: 6),
+                          Text('連続達成：$_streakDays日'),
+                          const SizedBox(height: 12),
+
+                          SegmentedButton<PraiseLevel>(
+                            segments: const [
+                              ButtonSegment(
+                                value: PraiseLevel.low,
+                                label: Text('低'),
+                              ),
+                              ButtonSegment(
+                                value: PraiseLevel.mid,
+                                label: Text('中'),
+                              ),
+                              ButtonSegment(
+                                value: PraiseLevel.high,
+                                label: Text('高'),
+                              ),
+                            ],
+                            selected: {_level},
+                            onSelectionChanged: (s) => _savePraiseLevel(s.first),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          FilledButton.icon(
+                            onPressed: () async {
+                              await NotificationService.instance.showNow(
+                                id: 9999,
+                                title: _nightlyTitle(),
+                                body: _nightlyBody(),
+                              );
+                            },
+                            icon: const Icon(Icons.notifications_active),
+                            label: const Text('まとめ（今すぐ）'),
                           ),
                         ],
                       ),
-                      onTap: () => _toggleDone(key, item),
                     ),
-                  );
-                }),
+                  ),
 
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                  Text(
+                    '未完了（${actives.length}）',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
 
-              if (!_hideCompleted)
-                ExpansionTile(
-                  initiallyExpanded: false,
-                  title: Text('完了済み（${dones.length}）'),
-                  children: dones.isEmpty
-                      ? [
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('まだ完了はない。ここが増えると気持ちいい。'),
-                          )
-                        ]
-                      : dones.map((entry) {
-                          final key = entry.key;
-                          final item = entry.value;
-                          return ListTile(
-                            leading: Checkbox(
-                              value: item.isDone,
-                              onChanged: (_) => _toggleDone(key, item),
-                            ),
-                            title: Text(
-                              item.title,
-                              style: const TextStyle(
-                                decoration: TextDecoration.lineThrough,
+                  if (actives.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Text('Todoを追加しよう。完了したら全力で褒める。'),
+                    )
+                  else
+                    ...actives.map((entry) {
+                      final key = entry.key;
+                      final item = entry.value;
+                      return Card(
+                        child: ListTile(
+                          leading: Checkbox(
+                            value: item.isDone,
+                            onChanged: (_) => _toggleDone(key, item),
+                          ),
+                          title: Text(item.title),
+                          subtitle: Text(_subtitle(item)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: '編集',
+                                icon: const Icon(Icons.edit),
+                                onPressed: () => _editTodo(key, item),
                               ),
-                            ),
-                            subtitle: Text(_subtitle(item)),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: '編集',
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () => _editTodo(key, item),
+                              IconButton(
+                                tooltip: '削除',
+                                icon: const Icon(Icons.delete),
+                                onPressed: () => _deleteTodo(key),
+                              ),
+                            ],
+                          ),
+                          onTap: () => _toggleDone(key, item),
+                        ),
+                      );
+                    }),
+
+                  const SizedBox(height: 16),
+
+                  if (!_hideCompleted)
+                    ExpansionTile(
+                      initiallyExpanded: false,
+                      title: Text('完了済み（${dones.length}）'),
+                      children: dones.isEmpty
+                          ? [
+                              const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text('まだ完了はない。ここが増えると気持ちいい。'),
+                              )
+                            ]
+                          : dones.map((entry) {
+                              final key = entry.key;
+                              final item = entry.value;
+                              return ListTile(
+                                leading: Checkbox(
+                                  value: item.isDone,
+                                  onChanged: (_) => _toggleDone(key, item),
                                 ),
-                                IconButton(
-                                  tooltip: '削除',
-                                  icon: const Icon(Icons.delete),
-                                  onPressed: () => _deleteTodo(key),
+                                title: Text(
+                                  item.title,
+                                  style: const TextStyle(
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
                                 ),
-                              ],
-                            ),
-                            onTap: () => _toggleDone(key, item),
-                          );
-                        }).toList(),
-                ),
-            ],
-          );
-        },
+                                subtitle: Text(_subtitle(item)),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: '編集',
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () => _editTodo(key, item),
+                                    ),
+                                    IconButton(
+                                      tooltip: '削除',
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: () => _deleteTodo(key),
+                                    ),
+                                  ],
+                                ),
+                                onTap: () => _toggleDone(key, item),
+                              );
+                            }).toList(),
+                    ),
+                ],
+              );
+            },
+          ),
+          if (_isInputVisible) _buildInputOverlay(),
+        ],
       ),
     );
   }
-}
 
-class _TodoInputDialog extends StatefulWidget {
-  final String title;
-  final String initial;
-  final String hint;
-  final String okText;
-
-  const _TodoInputDialog({
-    required this.title,
-    required this.initial,
-    required this.hint,
-    required this.okText,
-  });
-
-  @override
-  State<_TodoInputDialog> createState() => _TodoInputDialogState();
-}
-
-class _TodoInputDialogState extends State<_TodoInputDialog> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initial);
-    _focusNode = FocusNode();
-    
-    // Web/Mobileでキーボードを確実に出すため、開始直後にフォーカス要求
-    _focusNode.requestFocus();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // コンテンツの高さを制限しつつ、キーボード対応のためにSingleChildScrollViewを使用
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      // キーボードの高さ分だけ下を浮かせる
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-        ),
-        child: SingleChildScrollView(
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 更新されたことがわかるようにアイコンを追加
-                  Row(
-                    children: [
-                      const Icon(Icons.edit_note, color: Colors.deepPurple),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.title,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+  Widget _buildInputOverlay() {
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          // 背景（タップで閉じる）
+          GestureDetector(
+            onTap: _hideInput,
+            child: Container(
+              color: Colors.black54,
+            ),
+          ),
+          // 入力部分
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.flash_on, color: Colors.amber), // アイコンをさらに目立つものに
+                        const SizedBox(width: 8),
+                        Text(
+                          _inputTitle,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: _hideInput,
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _inputController,
+                      focusNode: _inputFocusNode,
+                      autofocus: true,
+                      style: const TextStyle(fontSize: 16),
+                      decoration: InputDecoration(
+                        hintText: _inputHint,
+                        fillColor: Colors.grey[100],
+                        filled: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.all(16),
+                      ),
+                      maxLines: 4,
+                      minLines: 1,
+                      onSubmitted: (_) => _submitInput(),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: _submitInput,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.deepPurple,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    autofocus: true,
-                    style: const TextStyle(fontSize: 16),
-                    decoration: InputDecoration(
-                      hintText: widget.hint,
-                      fillColor: Colors.grey[100],
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.all(16),
-                    ),
-                    maxLines: 4,
-                    minLines: 1,
-                    onSubmitted: (_) {
-                      if (_controller.text.isNotEmpty) {
-                        Navigator.pop(context, _controller.text);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: () {
-                      if (_controller.text.isNotEmpty) {
-                        Navigator.pop(context, _controller.text);
-                      }
-                    },
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: Colors.deepPurple,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      child: Text(
+                        _inputOkText,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      widget.okText,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
+
+// _TodoInputDialog は不要になったので削除
